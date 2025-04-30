@@ -1,0 +1,49 @@
+// NFT Smart Contract with Jetton Deposit Support (Tact)
+
+contract NftDepositJetton { 
+    address owner = 0:UQC0z8fAzLadW49j3wXu5XnltYbizZtls_exrk3JsHlpYKoV; // Owner address 
+    address jettonMaster = 0:EQCK6vUy9tldpxwNpipweI9ppXc1w2OV3uyUzk7tb4g85FCc; // Jetton Master 
+    uint128 deposited;
+
+    // Initialize only sets initial deposit to zero
+    init() {     
+        self.deposited = 0; 
+    }  
+
+    // Handle incoming Jetton internal_transfer
+    receive("internal_transfer") {     
+        // Ensure msg is from Jetton Wallet     
+        let senderWallet = incoming.msg.sender;     
+        let payload = slice::load_ref(); // unused in this version  
+
+        // Validate Jetton Master via Wallet's code hash check (simplified here)
+        let senderCode = senderWallet.code();     
+        require(senderCode != null, "Invalid sender");
+
+        // Increase deposit     
+        let amount = incoming.amount;     
+        self.deposited += amount; 
+    }  
+
+    // Withdraw function callable only by owner
+    external("withdraw") {     
+        require(msg.sender == self.owner, "Not the owner");     
+        let amount = msg.body~load_uint(128);     
+        require(amount <= self.deposited, "Insufficient deposit");
+
+        // Send internal_transfer back to owner's Jetton wallet
+        send(
+            to: self.owner,
+            value: 0.05, // keep small TON for gas
+            body: internal_transfer(
+                amount: amount,
+                from: self,
+                response_address: self.owner,
+                forward_ton_amount: 0,
+                forward_payload: null
+            )
+        );
+
+        self.deposited -= amount; 
+    }
+}
